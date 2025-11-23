@@ -1,0 +1,18 @@
+# Environment variables (contains secrets)
+.env
+
+# Backup directories
+backups/
+current/
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+entities.txt

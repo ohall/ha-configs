@@ -1,0 +1,27 @@
+{
+  "name": "ha-config-manager",
+  "version": "1.0.0",
+  "description": "Home Assistant configuration backup and restore manager",
+  "type": "module",
+  "main": "ha-sync.js",
+  "scripts": {
+    "backup": "node ha-sync.js backup",
+    "push": "node ha-sync.js push",
+    "restore": "node ha-sync.js restore",
+    "sync": "node ha-sync.js sync",
+    "diff": "node ha-sync.js diff"
+  },
+  "keywords": [
+    "home-assistant",
+    "backup",
+    "ssh",
+    "sync"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "agents-link": "^1.1.0",
+    "dotenv": "^16.4.5",
+    "ssh2-sftp-client": "^11.0.0"
+  }
+}
