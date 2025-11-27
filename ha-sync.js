@@ -4,9 +4,58 @@ import { loadConfig, getSshConfig } from './lib/config.js';
 import { SshFileClient } from './lib/ssh-client.js';
 import { BackupManager } from './lib/backup-manager.js';
 import { createInterface } from 'readline';
-import { mkdir, rm, cp } from 'fs/promises';
+import { mkdir, rm, cp, writeFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { spawn } from 'child_process';
+
+/**
+ * Downloads and formats entities from Home Assistant registry
+ * @param {SshFileClient} sshClient - Connected SSH client
+ * @param {Object} config - Application configuration
+ * @returns {Promise<string>} Formatted entity list string
+ */
+async function downloadEntities(sshClient, config) {
+  // Try to find the entity registry
+  // It's usually in .storage/core.entity_registry
+  const registryPath = `${config.remoteConfigPath}/.storage/core.entity_registry`;
+  // Ensure path uses forward slashes
+  const normalizedPath = registryPath.replace(/\\/g, '/');
+  
+  console.log(`Reading entity registry from ${normalizedPath}...`);
+  
+  try {
+    const content = await sshClient.readFile(normalizedPath);
+    const registry = JSON.parse(content.toString());
+    
+    if (!registry.data || !registry.data.entities) {
+      console.warn('Invalid registry format: missing data.entities');
+      return null;
+    }
+
+    const entities = registry.data.entities;
+    console.log(`Found ${entities.length} entities`);
+    
+    // Sort by entity_id
+    entities.sort((a, b) => a.entity_id.localeCompare(b.entity_id));
+    
+    let output = `Found ${entities.length} entities:\n\n`;
+    
+    entities.forEach(e => {
+      output += `${e.entity_id}\n`;
+      const name = e.name || e.original_name || '<no name>';
+      output += `  Name: ${name}\n`;
+      output += `  Platform: ${e.platform}\n`;
+      if (e.area_id) output += `  Area: ${e.area_id}\n`;
+      if (e.disabled_by) output += `  Disabled by: ${e.disabled_by}\n`;
+      output += `\n`;
+    });
+    
+    return output;
+  } catch (error) {
+    console.warn(`Failed to download entities: ${error.message}`);
+    return null;
+  }
+}
 
 /**
  * Downloads Home Assistant configuration from remote server
@@ -57,6 +106,13 @@ async function downloadConfig(config) {
     if (failed > 0) {
         console.warn(`\nWarning: ${failed} files failed to download.`);
         throw new Error(`${failed} files failed to download. Aborting sync to prevent inconsistent state.`);
+    }
+
+    // Download entities and save alongside config
+    const entitiesContent = await downloadEntities(sshClient, config);
+    if (entitiesContent) {
+        await writeFile(join(tempDownloadPath, 'entities.txt'), entitiesContent);
+        console.log('Saved entities.txt');
     }
 
     console.log(`\nDownload complete. Updating local configuration...`);
@@ -317,12 +373,11 @@ async function cmdPush(config) {
 
 /**
  * Command: sync
- * Downloads current config without creating a backup
+ * Downloads current config and creates a backup
  */
 async function cmdSync(config) {
-  console.log('Syncing configuration...\n');
-  await downloadConfig(config);
-  console.log('\nSync completed successfully!');
+  console.log('Syncing configuration and creating backup...\n');
+  await cmdBackup(config);
 }
 
 /**
@@ -358,44 +413,12 @@ async function cmdEntities(config) {
   try {
     console.log(`Connecting to ${config.host}...`);
     await sshClient.connect();
-
-    // Try to find the entity registry
-    // It's usually in .storage/core.entity_registry
-    const registryPath = `${config.remoteConfigPath}/.storage/core.entity_registry`;
-    // Ensure path uses forward slashes
-    const normalizedPath = registryPath.replace(/\\/g, '/');
-    
-    console.log(`Reading entity registry from ${normalizedPath}...`);
-    
-    const content = await sshClient.readFile(normalizedPath);
-    const registry = JSON.parse(content.toString());
-    
-    if (!registry.data || !registry.data.entities) {
-      console.error('Invalid registry format: missing data.entities');
-      return;
+    const output = await downloadEntities(sshClient, config);
+    if (output) {
+        console.log(output);
     }
-
-    const entities = registry.data.entities;
-    console.log(`Found ${entities.length} entities:\n`);
-    
-    // Sort by entity_id
-    entities.sort((a, b) => a.entity_id.localeCompare(b.entity_id));
-    
-    entities.forEach(e => {
-      console.log(`${e.entity_id}`);
-      const name = e.name || e.original_name || '<no name>';
-      console.log(`  Name: ${name}`);
-      console.log(`  Platform: ${e.platform}`);
-      if (e.area_id) console.log(`  Area: ${e.area_id}`);
-      if (e.disabled_by) console.log(`  Disabled by: ${e.disabled_by}`);
-      console.log('');
-    });
-
   } catch (error) {
     console.error(`Failed to list entities: ${error.message}`);
-    if (error.message.includes('no such file')) {
-        console.error('Could not find .storage/core.entity_registry. Is the path correct?');
-    }
     throw error;
   } finally {
     await sshClient.disconnect();
@@ -413,19 +436,18 @@ Usage:
   node ha-sync.js <command> [options]
 
 Commands:
-  backup              Download config from HA and create timestamped backup
+  sync                Download config from HA, fetch entities, and create timestamped backup
+  backup              Alias for sync
   push                Upload current local config to HA (overwrites remote)
-  sync                Download config from HA (no backup created)
   diff                Show changes between latest backup and current config
   restore [name]      Restore a backup (defaults to latest)
   list                List all available backups
-  entities            List all entities from remote registry
+  entities            List all entities from remote registry to console
   help                Show this help message
 
 Examples:
-  node ha-sync.js backup
-  node ha-sync.js push
   node ha-sync.js sync
+  node ha-sync.js push
   node ha-sync.js diff
   node ha-sync.js list
   node ha-sync.js entities

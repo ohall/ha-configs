@@ -8,15 +8,16 @@ Here are the most common commands you'll need:
 
 | Action | Command | Description |
 |--------|---------|-------------|
-| **Backup** | `npm run backup` | Download config from HA and create a timestamped backup |
+| **Sync** | `npm run sync` | Download config, fetch entities, and create a timestamped backup |
+| **Backup** | `npm run backup` | Alias for `sync` |
 | **Push** | `npm run push` | Upload your local `current/` config to HA (overwrites remote) |
-| **Sync** | `npm run sync` | Download config from HA without creating a backup |
 | **Diff** | `npm run diff` | Show changes between the latest backup and current config |
 | **Restore** | `npm run restore` | Restore from the latest backup |
 
 ## Features
 
 - **Automated Backups**: Download HA config files and create timestamped backups
+- **Entity Syncing**: Automatically fetches and saves the list of entities to `entities.txt`
 - **Push Capability**: Easily upload your local changes to the server
 - **Restore Capability**: Restore from any previous backup
 - **Pattern Matching**: Include/exclude files based on patterns
@@ -83,19 +84,28 @@ For better security, use SSH key authentication:
 
 ## Usage
 
-### Backup (Download + Create Timestamped Backup)
+### Sync (Download + Backup)
+
+```bash
+npm run sync
+# or
+node ha-sync.js sync
+```
+
+This is the primary command. It will:
+1. Connect to your HA server via SSH
+2. Download all matching configuration files
+3. Fetch the latest list of entities and save to `current/entities.txt`
+4. Create a timestamped backup in `./backups/`
+5. Keep the 10 most recent backups (older ones are auto-deleted)
+
+### Backup
 
 ```bash
 npm run backup
-# or
-node ha-sync.js backup
 ```
 
-This will:
-1. Connect to your HA server via SSH
-2. Download all matching configuration files
-3. Create a timestamped backup in `./backups/`
-4. Keep the 10 most recent backups (older ones are auto-deleted)
+Alias for `sync`.
 
 ### Push (Upload Local Config)
 
@@ -111,16 +121,6 @@ This will:
 3. Upload all files from your local `current/` directory to the remote server
 
 **Note:** This overwrites files on the remote server.
-
-### Sync (Download Only)
-
-```bash
-npm run sync
-# or
-node ha-sync.js sync
-```
-
-Downloads the latest configuration without creating a backup.
 
 ### Diff (Compare Local vs Backup)
 
@@ -147,7 +147,8 @@ Shows all available backups with timestamps.
 node ha-sync.js entities
 ```
 
-Connects to the remote Home Assistant server and lists all registered entities (IDs, names, and platforms). useful for finding the correct entity ID when editing configurations.
+Connects to the remote Home Assistant server and lists all registered entities (IDs, names, and platforms) to the console.
+Note that `sync` automatically saves this list to `current/entities.txt`.
 
 ### Restore
 
@@ -177,6 +178,8 @@ ha-configs/
 │   └── backup-manager.js   # Local backup storage
 ├── backups/                # Timestamped backups (auto-created)
 ├── current/                # Current downloaded config (auto-created)
+│   ├── entities.txt        # List of entities from last sync
+│   └── ...                 # Config files
 ├── ha-sync.js             # Main CLI script
 ├── package.json
 ├── .env                   # Your configuration (create from .env.example)
@@ -241,7 +244,7 @@ Common files to exclude:
 
 ### No Backups Available
 
-- Run `npm run backup` at least once to create the first backup
+- Run `npm run sync` at least once to create the first backup
 - Check that `HA_LOCAL_BACKUP_PATH` is correctly configured
 
 ## Development
