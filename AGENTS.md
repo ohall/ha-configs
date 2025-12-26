@@ -56,6 +56,7 @@ Output Expectations
 	•	Do not include deployment or restart instructions unless asked
 
 Assumptions
-	•	Home Assistant is running in YAML mode (not UI-only)
+	•	All available entities can be found in the entities.txt file.
+	• 	Home Assistant is running in YAML mode (not UI-only)
 	•	Existing configurations are authoritative
 	•	The goal is correctness, maintainability, and long-term stability
