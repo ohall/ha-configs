@@ -8,6 +8,12 @@ import { mkdir, rm, cp, writeFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { spawn } from 'child_process';
 
+// Add Windows Powershell support for conditionally returing an unhandled exception at the bottom
+import { fileURLToPath } from 'url';
+import { resolve } from 'path';
+const thisFile = fileURLToPath(import.meta.url);
+const invokedFile = resolve(process.argv[1] || '');
+
 /**
  * Downloads and formats entities from Home Assistant registry
  * @param {SshFileClient} sshClient - Connected SSH client
@@ -516,7 +522,7 @@ async function main() {
 }
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (thisFile === invokedFile) {
   main().catch(error => {
     console.error('Unexpected error:', error);
     process.exit(1);
